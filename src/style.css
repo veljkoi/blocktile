@@ -35,3 +35,65 @@ h1 { margin: 0; font-size: clamp(2rem, 9vw, 4.5rem); letter-spacing: -.07em; tex
 [data-kind="shield"] { fill: #65fbd2; stroke: #d9fff5; }
 [data-kind="hazard"] { fill: #ff557a; stroke: #ffd5de; }
 [data-player] { fill: #ffca5f; stroke: #fff2bd; stroke-width: .07; filter: drop-shadow(0 0 .25px #ffca5f); transition: x 120ms ease, y 120ms ease; }
+
+.run-scores { display: flex; align-items: center; gap: .7rem; }
+.best { margin: 0; color: #747e9f; text-transform: uppercase; letter-spacing: .1em; font-size: clamp(.62rem, 2.5vw, .72rem); white-space: nowrap; }
+.best strong { color: #ffca5f; }
+.board-shell { position: relative; }
+[data-impact-kind="hazard-shield"] {
+  fill: none;
+  stroke: #ffca5f;
+  stroke-width: .16;
+  vector-effect: non-scaling-stroke;
+  transform-box: fill-box;
+  transform-origin: center;
+  pointer-events: none;
+  animation: interception-impact 220ms ease-out forwards;
+}
+.run-ended::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: #ff315c66;
+  animation: hazard-flash 220ms ease-out forwards;
+}
+.player-frozen {
+  transition: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: player-freeze 220ms ease-out both;
+}
+[data-impact-kind="hazard-player"] { display: none; }
+.run-over {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  text-align: center;
+  background: #090c18a8;
+  backdrop-filter: blur(1px);
+}
+.run-over > div { padding: 1.25rem; border: 1px solid #ffca5f66; border-radius: .65rem; background: #10152ae8; box-shadow: 0 .75rem 2rem #0009; }
+.run-over h2 { margin: 0; font-size: clamp(1.5rem, 7vw, 2.4rem); text-transform: uppercase; }
+.run-over p { margin: .5rem 0 0; color: #d8dcef; }
+.play-again { margin-top: 1.1rem; border: 0; border-radius: 999px; padding: .75rem 1.5rem; color: #091018; background: #65fbd2; font-weight: 700; }
+@keyframes interception-impact {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(.08); }
+}
+@keyframes hazard-flash {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes player-freeze {
+  0%, 45% { transform: translateX(.09px); filter: drop-shadow(0 0 .45px #ff315c); }
+  25%, 65% { transform: translateX(-.09px); }
+  100% { transform: none; filter: drop-shadow(0 0 .3px #ff315c); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-player], [data-impact-kind], .run-ended::after { animation-duration: 1ms; transition-duration: 1ms; }
+}

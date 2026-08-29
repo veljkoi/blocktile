@@ -7,6 +7,9 @@ export type Hazard = Readonly<{
   id: number; kind: "hazard"; direction: Direction; lane: number; column: number; row: number;
 }>;
 export type MovingShieldOrHazard = MovingShield | Hazard;
+export type Impact = Readonly<{
+  id: number; kind: "hazard-shield" | "hazard-player"; x: number; y: number; remainingMilliseconds: number;
+}>;
 
 export type RunState = Readonly<{
   board: Readonly<{
@@ -18,6 +21,7 @@ export type RunState = Readonly<{
   score: number;
   status: "running" | "ended";
   moving: boolean;
+  impacts: readonly Impact[];
 }>;
 
 export type RunEngine = Readonly<{
@@ -44,6 +48,7 @@ export function createRunEngine(options: RunEngineOptions = {}): RunEngine {
     score: 0,
     status: "running",
     moving: false,
+    impacts: [],
   };
   let movementRemaining = 0;
   let bufferedDirection: Direction | null = null;
@@ -51,6 +56,7 @@ export function createRunEngine(options: RunEngineOptions = {}): RunEngine {
   let spawnRemaining = INITIAL_SPAWN_INTERVAL;
   let nextCadenceStep = CADENCE_STEP_MILLISECONDS;
   let nextTileId = 1;
+  let nextImpactId = 1;
 
   function startMovement(direction: Direction): void {
     const deltas: Record<Direction, readonly [number, number]> = {
@@ -139,14 +145,130 @@ export function createRunEngine(options: RunEngineOptions = {}): RunEngine {
     state = { ...state, board: { ...state.board, movingShieldsAndHazards: [...state.board.movingShieldsAndHazards, tile] } };
   }
 
-  function moveMovingShieldOrHazards(elapsedMilliseconds: number): void {
+  function tilePosition(tile: MovingShieldOrHazard): Readonly<{ x: number; y: number }> {
+    const horizontal = tile.direction === "left" || tile.direction === "right";
+    return { x: horizontal ? tile.column : tile.column - 1, y: horizontal ? tile.row - 1 : tile.row };
+  }
+
+  function tileVelocity(tile: MovingShieldOrHazard): Readonly<{ x: number; y: number }> {
+    if (tile.direction === "right") return { x: TILE_SPEED, y: 0 };
+    if (tile.direction === "left") return { x: -TILE_SPEED, y: 0 };
+    if (tile.direction === "down") return { x: 0, y: TILE_SPEED };
+    return { x: 0, y: -TILE_SPEED };
+  }
+
+  function axisContactTime(position: number, velocity: number): readonly [number, number] | null {
+    if (velocity === 0) return Math.abs(position) <= 1 ? [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY] : null;
+    const first = (-1 - position) / velocity;
+    const second = (1 - position) / velocity;
+    return [Math.min(first, second), Math.max(first, second)];
+  }
+
+  function contactTime(
+    firstPosition: Readonly<{ x: number; y: number }>,
+    firstVelocity: Readonly<{ x: number; y: number }>,
+    secondPosition: Readonly<{ x: number; y: number }>,
+    secondVelocity: Readonly<{ x: number; y: number }>,
+    maximumMilliseconds: number,
+  ): number | null {
+    const x = axisContactTime(firstPosition.x - secondPosition.x, firstVelocity.x - secondVelocity.x);
+    const y = axisContactTime(firstPosition.y - secondPosition.y, firstVelocity.y - secondVelocity.y);
+    if (!x || !y) return null;
+    const entry = Math.max(0, x[0], y[0]);
+    const exit = Math.min(maximumMilliseconds, x[1], y[1]);
+    return entry <= exit ? entry : null;
+  }
+
+  function advanceMovingTilesAndImpacts(elapsedMilliseconds: number): void {
     const distance = elapsedMilliseconds * TILE_SPEED;
     const movingShieldsAndHazards = state.board.movingShieldsAndHazards.map((tile): MovingShieldOrHazard => {
       if (tile.direction === "right") return { ...tile, column: tile.column + distance };
       if (tile.direction === "left") return { ...tile, column: tile.column - distance };
       if (tile.direction === "down") return { ...tile, row: tile.row + distance };
       return { ...tile, row: tile.row - distance };
-    }).filter((tile) => {
+    });
+    const impacts = state.impacts
+      .map((impact) => ({ ...impact, remainingMilliseconds: impact.remainingMilliseconds - elapsedMilliseconds }))
+      .filter(({ remainingMilliseconds }) => remainingMilliseconds > 0);
+    state = { ...state, impacts, board: { ...state.board, movingShieldsAndHazards } };
+  }
+
+  function nextContact(maximumMilliseconds: number): Readonly<{
+    time: number; kind: "hazard-shield" | "hazard-player"; hazard: Hazard; shield?: MovingShield;
+  }> | null {
+    const tiles = state.board.movingShieldsAndHazards;
+    const hazards = tiles.filter((tile): tile is Hazard => tile.kind === "hazard");
+    const movingShields = tiles.filter((tile): tile is MovingShield => tile.kind === "shield");
+    const candidates: Array<{ time: number; kind: "hazard-shield" | "hazard-player"; hazard: Hazard; shield?: MovingShield }> = [];
+    for (const hazard of hazards) {
+      for (const movingShield of movingShields) {
+        const time = contactTime(tilePosition(hazard), tileVelocity(hazard), tilePosition(movingShield), tileVelocity(movingShield), maximumMilliseconds);
+        if (time !== null) candidates.push({ time, kind: "hazard-shield", hazard, shield: movingShield });
+      }
+      const player = { x: state.board.player.column - 1, y: state.board.player.row - 1 };
+      const time = contactTime(tilePosition(hazard), tileVelocity(hazard), player, { x: 0, y: 0 }, maximumMilliseconds);
+      if (time !== null) candidates.push({ time, kind: "hazard-player", hazard });
+    }
+    const creationOrder = (contact: (typeof candidates)[number]): readonly [number, number] => {
+      const otherId = contact.shield?.id ?? contact.hazard.id;
+      return [Math.min(contact.hazard.id, otherId), Math.max(contact.hazard.id, otherId)];
+    };
+    candidates.sort((first, second) => {
+      const firstOrder = creationOrder(first);
+      const secondOrder = creationOrder(second);
+      return first.time - second.time
+        || (first.kind === second.kind ? 0 : first.kind === "hazard-shield" ? -1 : 1)
+        || firstOrder[0] - secondOrder[0]
+        || firstOrder[1] - secondOrder[1];
+    });
+    return candidates[0] ?? null;
+  }
+
+  function resolveContact(contact: NonNullable<ReturnType<typeof nextContact>>): void {
+    const currentHazard = state.board.movingShieldsAndHazards.find(({ id }) => id === contact.hazard.id) ?? contact.hazard;
+    const hazardPosition = tilePosition(currentHazard);
+    if (contact.kind === "hazard-shield" && contact.shield) {
+      const currentMovingShield = state.board.movingShieldsAndHazards.find(({ id }) => id === contact.shield?.id) ?? contact.shield;
+      const shieldPosition = tilePosition(currentMovingShield);
+      const removed = new Set([contact.hazard.id, contact.shield.id]);
+      state = {
+        ...state,
+        score: state.score + 1,
+        impacts: [...state.impacts, {
+          id: nextImpactId++, kind: contact.kind,
+          x: (hazardPosition.x + shieldPosition.x + 1) / 2,
+          y: (hazardPosition.y + shieldPosition.y + 1) / 2,
+          remainingMilliseconds: 220,
+        }],
+        board: { ...state.board, movingShieldsAndHazards: state.board.movingShieldsAndHazards.filter(({ id }) => !removed.has(id)) },
+      };
+      return;
+    }
+    const player = { x: state.board.player.column - 1, y: state.board.player.row - 1 };
+    state = {
+      ...state, status: "ended", moving: false,
+      impacts: [...state.impacts, {
+        id: nextImpactId++, kind: contact.kind,
+        x: (hazardPosition.x + player.x + 1) / 2,
+        y: (hazardPosition.y + player.y + 1) / 2,
+        remainingMilliseconds: 220,
+      }],
+    };
+    bufferedDirection = null;
+    movementRemaining = 0;
+  }
+
+  function moveMovingShieldOrHazards(elapsedMilliseconds: number): void {
+    let remaining = elapsedMilliseconds;
+    while (remaining > 0 && state.status === "running") {
+      const contact = nextContact(remaining);
+      const movement = contact?.time ?? remaining;
+      advanceMovingTilesAndImpacts(movement);
+      remaining -= movement;
+      if (contact) resolveContact(contact);
+    }
+    if (state.status !== "running") return;
+    const movingShieldsAndHazards = state.board.movingShieldsAndHazards.filter((tile) => {
       if (tile.direction === "right") return tile.column < state.board.columns;
       if (tile.direction === "left") return tile.column > -1;
       if (tile.direction === "down") return tile.row < state.board.rows;
@@ -158,9 +280,10 @@ export function createRunEngine(options: RunEngineOptions = {}): RunEngine {
   function advance(elapsedMilliseconds: number): void {
     let elapsed = Math.max(0, elapsedMilliseconds);
     advancePlayer(elapsed);
-    while (elapsed > 0) {
+    while (elapsed > 0 && state.status === "running") {
       const segment = Math.min(elapsed, spawnRemaining, nextCadenceStep - runElapsed);
       moveMovingShieldOrHazards(segment);
+      if (state.status !== "running") return;
       elapsed -= segment;
       runElapsed += segment;
       spawnRemaining -= segment;

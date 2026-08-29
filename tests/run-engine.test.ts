@@ -26,6 +26,7 @@ describe("run engine", () => {
       score: 0,
       status: "running",
       moving: false,
+      impacts: [],
     });
   });
 
@@ -44,7 +45,7 @@ describe("run engine", () => {
   });
 
   it("never moves the Player beyond the Board", () => {
-    const engine = createRunEngine();
+    const engine = createRunEngine({ random: () => 0 });
     for (let step = 0; step < 20; step += 1) {
       engine.act("left"); engine.advance(120);
       engine.act("up"); engine.advance(120);
@@ -112,8 +113,7 @@ describe("run engine", () => {
 
   it("starts spawn attempts at 1.5 seconds and accelerates after ten seconds", () => {
     let randomCalls = 0;
-    const seeded = seededRandom(7);
-    const engine = createRunEngine({ random: () => { randomCalls += 1; return seeded(); } });
+    const engine = createRunEngine({ random: () => { randomCalls += 1; return 0; } });
 
     engine.advance(1_499);
     expect(randomCalls).toBe(0);
@@ -127,8 +127,7 @@ describe("run engine", () => {
 
   it("never accelerates spawn attempts beyond one every 0.5 seconds", () => {
     let randomCalls = 0;
-    const seeded = seededRandom(7);
-    const engine = createRunEngine({ random: () => { randomCalls += 1; return seeded(); } });
+    const engine = createRunEngine({ random: () => { randomCalls += 1; return 0; } });
     engine.advance(225_000);
     const callsAtFloor = randomCalls;
 
@@ -171,5 +170,41 @@ describe("run engine", () => {
     engine.advance(4_500);
 
     expect(engine.getState().board.movingShieldsAndHazards.some(({ id }) => id === 1)).toBe(false);
+  });
+
+  it("ends the Run on Hazard–Player contact and freezes the final Board", () => {
+    const engine = createRunEngine({ random: seededSequence(0.99, 0.5, 7 / 16) });
+
+    engine.advance(3_500);
+
+    expect(engine.getState()).toMatchObject({
+      status: "ended",
+      moving: false,
+      score: 0,
+      board: {
+        player: { column: 4, row: 8 },
+        movingShieldsAndHazards: expect.arrayContaining([expect.objectContaining({ kind: "hazard", row: 8 })]),
+      },
+      impacts: [expect.objectContaining({ kind: "hazard-player", x: 4, y: 7.5 })],
+    });
+    const finalState = engine.getState();
+    engine.act("left");
+    engine.advance(10_000);
+    expect(engine.getState()).toEqual(finalState);
+  });
+
+  it("destroys the first Hazard–Shield pair on contact and awards one point", () => {
+    const engine = createRunEngine({ random: seededSequence(
+      0, 0.99, 0,
+      0.99, 0.5, 0,
+    ) });
+
+    engine.advance(4_250);
+
+    expect(engine.getState().score).toBe(1);
+    expect(engine.getState().board.movingShieldsAndHazards).toEqual([]);
+    expect(engine.getState().impacts).toEqual([
+      expect.objectContaining({ kind: "hazard-shield", x: 5.5, y: 0.5 }),
+    ]);
   });
 });

@@ -8,7 +8,10 @@ function seededSequence(...values: number[]): () => number {
 }
 
 describe("Blocktile app", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
   it("starts a fresh Run with a compact header and no directional controls", () => {
     const root = document.createElement("main");
     mountApp(root);
@@ -19,7 +22,7 @@ describe("Blocktile app", () => {
     const board = getByRole(root, "grid", { name: "Board" });
     expect(board.querySelectorAll("[data-cell]")).toHaveLength(128);
     expect(board.querySelector("[data-player]")?.getAttribute("aria-label")).toBe("Player at column 4, row 8");
-    expect(root.querySelector(".run-header")?.textContent).toBe("BLOCKTILESCORE 0");
+    expect(root.querySelector(".run-header")?.textContent).toBe("BLOCKTILESCORE 0BEST 0");
     expect(queryByRole(root, "button")).toBeNull();
     expect(root.querySelector(".hint")).toBeNull();
   });
@@ -71,5 +74,53 @@ describe("Blocktile app", () => {
     const overlapping = root.querySelectorAll("[data-moving-shield-or-hazard]");
     expect(overlapping[0]?.getAttribute("width")).not.toBe(overlapping[1]?.getAttribute("width"));
     unmount();
+  });
+
+  it("keeps the final Board visible, persists Best, and starts a fresh Run on Play again", () => {
+    let nextFrame: FrameRequestCallback | undefined;
+    vi.spyOn(performance, "now").mockReturnValue(0);
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => { nextFrame = callback; return 1; });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+    vi.spyOn(Math, "random").mockImplementation(seededSequence(
+      0, 0.99, 7 / 16,
+      0.99, 0.5, 7 / 16,
+      0.99, 0.5, 7 / 16,
+    ));
+    const root = document.createElement("main");
+    const unmount = mountApp(root);
+    fireEvent.click(getByRole(root, "button", { name: "Play" }));
+
+    nextFrame?.(1_500);
+    nextFrame?.(3_000);
+    nextFrame?.(4_250);
+    expect(root.querySelector(".score strong")?.textContent).toBe("1");
+    expect(root.querySelector("[data-impact-kind=\"hazard-shield\"]")).not.toBeNull();
+    nextFrame?.(4_500);
+    nextFrame?.(6_500);
+
+    const board = getByRole(root, "grid", { name: "Board" });
+    const frozenPlayerPosition = root.querySelector("[data-player]")?.getAttribute("x");
+    expect(getByRole(root, "dialog", { name: "Run over" })).not.toBeNull();
+    expect(root.querySelector(".board-shell")?.classList.contains("run-ended")).toBe(true);
+    expect(root.querySelector("[data-player]")?.classList.contains("player-frozen")).toBe(true);
+    expect(root.querySelector("[data-impact-kind=\"hazard-player\"]")).not.toBeNull();
+    expect(root.contains(board)).toBe(true);
+    expect(localStorage.getItem("blocktile.best-score")).toBe("1");
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    expect(root.querySelector("[data-player]")?.getAttribute("x")).toBe(frozenPlayerPosition);
+
+    fireEvent.click(getByRole(root, "button", { name: "Play again" }));
+
+    expect(queryByRole(root, "dialog", { name: "Run over" })).toBeNull();
+    expect(root.querySelector(".score strong")?.textContent).toBe("0");
+    expect(root.querySelector(".best strong")?.textContent).toBe("1");
+    expect(root.querySelectorAll("[data-moving-shield-or-hazard]")).toHaveLength(0);
+
+    unmount();
+    const returningRoot = document.createElement("main");
+    const unmountReturningApp = mountApp(returningRoot);
+    fireEvent.click(getByRole(returningRoot, "button", { name: "Play" }));
+    expect(returningRoot.querySelector(".best strong")?.textContent).toBe("1");
+    unmountReturningApp();
   });
 });
