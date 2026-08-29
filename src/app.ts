@@ -35,15 +35,45 @@ export function mountApp(root: HTMLElement): () => void {
     if (!engine) return;
     const state = engine.getState();
     const score = root.querySelector(".score strong"); if (score) score.textContent = String(state.score);
-    const player = root.querySelector("[data-player]"); if (!player) return;
+    const board = root.querySelector<SVGSVGElement>(".board");
+    const player = root.querySelector("[data-player]");
+    if (!board || !player) return;
+    const tileIds = new Set(state.board.movingShieldsAndHazards.map(({ id }) => String(id)));
+    board.querySelectorAll<SVGRectElement>("[data-moving-shield-or-hazard]").forEach((tile) => {
+      if (!tileIds.has(tile.dataset.tileId ?? "")) tile.remove();
+    });
+    state.board.movingShieldsAndHazards.forEach((movingShieldOrHazard) => {
+      let tile = board.querySelector<SVGRectElement>("[data-tile-id=\"" + movingShieldOrHazard.id + "\"]");
+      if (!tile) {
+        tile = document.createElementNS(SVG_NS, "rect");
+        tile.setAttribute("data-moving-shield-or-hazard", "");
+        tile.setAttribute("data-tile-id", String(movingShieldOrHazard.id));
+        tile.setAttribute("rx", ".12");
+        tile.setAttribute("opacity", "0.78"); tile.setAttribute("stroke-width", ".08");
+        board.insertBefore(tile, player);
+      }
+      const horizontal = movingShieldOrHazard.direction === "left" || movingShieldOrHazard.direction === "right";
+      const inset = 0.3 * (1 - Math.exp(-(movingShieldOrHazard.id - 1) / 10));
+      const column = horizontal ? movingShieldOrHazard.column : movingShieldOrHazard.column - 1;
+      const row = horizontal ? movingShieldOrHazard.row - 1 : movingShieldOrHazard.row;
+      tile.setAttribute("x", String(column + inset));
+      tile.setAttribute("y", String(row + inset));
+      tile.setAttribute("width", String(1 - inset * 2));
+      tile.setAttribute("height", String(1 - inset * 2));
+      tile.setAttribute("data-kind", movingShieldOrHazard.kind);
+      tile.setAttribute("data-direction", movingShieldOrHazard.direction);
+      const name = movingShieldOrHazard.kind === "shield" ? "Moving Shield" : "Hazard";
+      tile.setAttribute("aria-label", name + " traveling " + movingShieldOrHazard.direction + " in Lane " + movingShieldOrHazard.lane);
+    });
     player.setAttribute("aria-label", `Player at column ${state.board.player.column}, row ${state.board.player.row}`);
     player.setAttribute("x", String(state.board.player.column - 1)); player.setAttribute("y", String(state.board.player.row - 1));
   }
-  function startRun(): void { engine = createRunEngine(); renderRun(); }
+  function startRun(): void { engine = createRunEngine(); renderRun(); startClock(); }
   function move(direction: Direction): void { engine?.act(direction); updateRun(); startClock(); }
   function startClock(): void {
-    if (animationFrame || !engine?.getState().moving || typeof requestAnimationFrame === "undefined") return;
-    previousFrame = performance.now(); animationFrame = requestAnimationFrame(tick);
+    if (animationFrame || engine?.getState().status !== "running" || typeof requestAnimationFrame === "undefined") return;
+    if (previousFrame === 0) previousFrame = performance.now();
+    animationFrame = requestAnimationFrame(tick);
   }
   function tick(now: number): void { animationFrame = 0; engine?.advance(now - previousFrame); previousFrame = now; updateRun(); startClock(); }
   function onKeyDown(event: KeyboardEvent): void { const direction = directionFromKey(event.key); if (direction && engine) { event.preventDefault(); move(direction); } }

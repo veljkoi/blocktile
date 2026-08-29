@@ -31,4 +31,7 @@ h1 { margin: 0; font-size: clamp(2rem, 9vw, 4.5rem); letter-spacing: -.07em; tex
 .board-shell { border: 1px solid #727da933; border-radius: .35rem; overflow: hidden; background: #05071388; box-shadow: 0 .75rem 2rem #0007; }
 .board { display: block; width: 100%; aspect-ratio: 1 / 2; touch-action: none; }
 [data-cell] { fill: #18203b; stroke: #59638b55; stroke-width: .035; }
+[data-moving-shield-or-hazard] { vector-effect: non-scaling-stroke; }
+[data-kind="shield"] { fill: #65fbd2; stroke: #d9fff5; }
+[data-kind="hazard"] { fill: #ff557a; stroke: #ffd5de; }
 [data-player] { fill: #ffca5f; stroke: #fff2bd; stroke-width: .07; filter: drop-shadow(0 0 .25px #ffca5f); transition: x 120ms ease, y 120ms ease; }
