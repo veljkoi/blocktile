@@ -15,7 +15,7 @@ export function mountApp(root: HTMLElement): () => void {
   }
 
   function renderRun(): void {
-    root.innerHTML = `<section class="run"><header><div><p class="eyebrow">Current Run</p><h1>Blocktile</h1></div><p class="score" aria-live="polite">Score <strong>0</strong></p></header><div class="board-shell"><svg class="board" role="grid" aria-label="Board" viewBox="0 0 8 16" tabindex="0"></svg></div><div class="controls" aria-label="Directional controls"><button type="button" data-direction="up" aria-label="Move up">↑</button><button type="button" data-direction="left" aria-label="Move left">←</button><button type="button" data-direction="down" aria-label="Move down">↓</button><button type="button" data-direction="right" aria-label="Move right">→</button></div><p class="hint">Swipe · Arrow keys · WASD</p></section>`;
+    root.innerHTML = `<section class="run"><header class="run-header"><h1>BLOCKTILE</h1><p class="score" aria-live="polite">SCORE <strong>0</strong></p></header><div class="board-shell"><svg class="board" role="grid" aria-label="Board" viewBox="0 0 8 16" tabindex="0"></svg></div></section>`;
     const board = root.querySelector<SVGSVGElement>(".board");
     if (!board) return;
     for (let row = 1; row <= 16; row += 1) {
@@ -27,7 +27,6 @@ export function mountApp(root: HTMLElement): () => void {
     }
     const player = document.createElementNS(SVG_NS, "rect");
     player.setAttribute("data-player", ""); player.setAttribute("width", "1"); player.setAttribute("height", "1"); player.setAttribute("rx", ".18"); board.append(player);
-    root.querySelectorAll<HTMLButtonElement>("[data-direction]").forEach((button) => button.addEventListener("click", () => move(button.dataset.direction as Direction)));
     board.addEventListener("pointerdown", onPointerDown); board.addEventListener("pointerup", onPointerUp);
     updateRun();
   }
