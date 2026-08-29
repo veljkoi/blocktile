@@ -18,6 +18,9 @@ header h1 { font-size: clamp(1.7rem, 8vw, 3rem); }
 .board-shell { padding: .55rem; border: 1px solid #727da933; border-radius: 1rem; background: #05071388; box-shadow: 0 1.5rem 4rem #0008; }
 .board { display: block; width: 100%; max-height: calc(100vh - 15rem); aspect-ratio: 1 / 2; margin: auto; touch-action: none; }
 [data-cell] { fill: #18203b; stroke: #59638b55; stroke-width: .035; }
+[data-moving-shield-or-hazard] { vector-effect: non-scaling-stroke; }
+[data-kind="shield"] { fill: #65fbd2; stroke: #d9fff5; }
+[data-kind="hazard"] { fill: #ff557a; stroke: #ffd5de; }
 [data-player] { fill: #ffca5f; stroke: #fff2bd; stroke-width: .07; filter: drop-shadow(0 0 .25px #ffca5f); transition: x 120ms ease, y 120ms ease; }
 .controls { display: grid; grid-template-columns: repeat(3, 3.4rem); grid-template-areas: ". up ." "left down right"; justify-content: center; gap: .4rem; margin-top: .9rem; }
 .controls button { width: 3.4rem; height: 2.8rem; border: 1px solid #737da955; border-radius: .7rem; background: #1c2441cc; font-size: 1.25rem; }

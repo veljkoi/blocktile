@@ -2,12 +2,27 @@ import { describe, expect, it } from "vitest";
 
 import { createRunEngine } from "../src/run-engine";
 
+function seededSequence(...values: number[]): () => number {
+  let index = 0;
+  return () => values[index++] ?? values.at(-1) ?? 0;
+}
+
+function seededRandom(seed: number): () => number {
+  return () => {
+    seed |= 0;
+    seed = seed + 0x6d2b79f5 | 0;
+    let value = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    value = value + Math.imul(value ^ value >>> 7, 61 | value) ^ value;
+    return ((value ^ value >>> 14) >>> 0) / 4_294_967_296;
+  };
+}
+
 describe("run engine", () => {
   it("starts a fresh Run with the Player in column 4 and row 8", () => {
     const engine = createRunEngine();
 
     expect(engine.getState()).toEqual({
-      board: { columns: 8, rows: 16, player: { column: 4, row: 8 } },
+      board: { columns: 8, rows: 16, player: { column: 4, row: 8 }, movingShieldsAndHazards: [] },
       score: 0,
       status: "running",
       moving: false,
@@ -53,5 +68,108 @@ describe("run engine", () => {
     expect(engine.getState().moving).toBe(true);
     engine.advance(120);
     expect(engine.getState().moving).toBe(false);
+  });
+
+  it.each([
+    [0, "up", { column: 1, row: 15 }],
+    [0.25, "down", { column: 1, row: 0 }],
+    [0.5, "left", { column: 7, row: 1 }],
+    [0.99, "right", { column: 0, row: 1 }],
+  ] as const)("moves Moving Shields %s at two cells per second", (directionRandom, direction, position) => {
+    const engine = createRunEngine({ random: seededSequence(0, directionRandom, 0) });
+
+    engine.advance(1_500);
+    expect(engine.getState().board.movingShieldsAndHazards[0]).toMatchObject({
+      id: 1, kind: "shield", direction, lane: 1,
+    });
+
+    engine.advance(500);
+    expect(engine.getState().board.movingShieldsAndHazards[0]).toMatchObject(position);
+  });
+
+  it("safely spawns a Hazard from a seeded random source", () => {
+    const engine = createRunEngine({ random: seededRandom(123) });
+
+    engine.advance(1_500);
+
+    expect(engine.getState().board.movingShieldsAndHazards).toEqual([
+      { id: 1, kind: "hazard", direction: "up", lane: 4, column: 4, row: 16 },
+    ]);
+  });
+
+  it("uniformly samples a Lane and skips a Hazard with less than 750 milliseconds to react", () => {
+    const engine = createRunEngine({ random: seededSequence(0.99, 0.99, 7 / 16) });
+    for (let step = 0; step < 3; step += 1) {
+      engine.act("left");
+      engine.advance(120);
+    }
+
+    engine.advance(1_140);
+
+    expect(engine.getState().board.player).toEqual({ column: 1, row: 8 });
+    expect(engine.getState().board.movingShieldsAndHazards).toEqual([]);
+  });
+
+  it("starts spawn attempts at 1.5 seconds and accelerates after ten seconds", () => {
+    let randomCalls = 0;
+    const seeded = seededRandom(7);
+    const engine = createRunEngine({ random: () => { randomCalls += 1; return seeded(); } });
+
+    engine.advance(1_499);
+    expect(randomCalls).toBe(0);
+    engine.advance(1);
+    expect(randomCalls).toBe(3);
+    engine.advance(8_949);
+    expect(randomCalls).toBe(18);
+    engine.advance(1);
+    expect(randomCalls).toBe(21);
+  });
+
+  it("never accelerates spawn attempts beyond one every 0.5 seconds", () => {
+    let randomCalls = 0;
+    const seeded = seededRandom(7);
+    const engine = createRunEngine({ random: () => { randomCalls += 1; return seeded(); } });
+    engine.advance(225_000);
+    const callsAtFloor = randomCalls;
+
+    engine.advance(2_000);
+
+    expect(randomCalls - callsAtFloor).toBe(12);
+  });
+
+  it("rejects a spawn when its entry is occupied", () => {
+    const engine = createRunEngine({ random: () => 0.99 });
+    engine.advance(225_000);
+    const before = engine.getState().board.movingShieldsAndHazards;
+    const latestId = Math.max(...before.map(({ id }) => id));
+    expect(before.filter(({ column, row }) => row === 16 && column < 1 && column + 1 > 0)).toHaveLength(1);
+
+    engine.advance(500);
+
+    const nextLatestId = Math.max(...engine.getState().board.movingShieldsAndHazards.map(({ id }) => id));
+    expect(nextLatestId).toBe(latestId);
+  });
+
+  it("allows same-kind Moving Shields and Hazards to overlap", () => {
+    const engine = createRunEngine({ random: seededSequence(
+      0, 0.99, 0,
+      0, 0.5, 0,
+      0, 0, 0,
+    ) });
+
+    engine.advance(4_500);
+
+    const [first, second] = engine.getState().board.movingShieldsAndHazards;
+    expect(first).toMatchObject({ kind: "shield", lane: 1, column: 5 });
+    expect(second).toMatchObject({ kind: "shield", lane: 1, column: 5 });
+  });
+
+  it("removes a Moving Shield or Hazard after its trailing edge exits the Board", () => {
+    const engine = createRunEngine({ random: seededSequence(0, 0.99, 0) });
+    engine.advance(1_500);
+
+    engine.advance(4_500);
+
+    expect(engine.getState().board.movingShieldsAndHazards.some(({ id }) => id === 1)).toBe(false);
   });
 });
