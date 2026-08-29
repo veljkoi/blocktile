@@ -2,27 +2,33 @@
 
 :root { color: #f7f5ff; background: #090c18; font-family: "Space Grotesk", system-ui, sans-serif; font-synthesis: none; }
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradient(circle at 50% 20%, #29305b 0, #10152a 35%, #090c18 72%); }
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+body { margin: 0; min-width: 320px; background: radial-gradient(circle at 50% 20%, #29305b 0, #10152a 35%, #090c18 72%); }
 button { font: inherit; color: inherit; cursor: pointer; }
-#app { min-height: 100vh; display: grid; place-items: center; padding: 1.25rem; }
+#app {
+  min-height: 100vh;
+  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: max(.5rem, env(safe-area-inset-top)) max(.5rem, env(safe-area-inset-right)) max(.5rem, env(safe-area-inset-bottom)) max(.5rem, env(safe-area-inset-left));
+}
 .welcome { text-align: center; max-width: 32rem; }
 h1 { margin: 0; font-size: clamp(2rem, 9vw, 4.5rem); letter-spacing: -.07em; text-transform: uppercase; }
 .eyebrow { margin: 0 0 .4rem; color: #65fbd2; font-size: .75rem; letter-spacing: .2em; text-transform: uppercase; }
 .welcome > p:not(.eyebrow) { color: #aab1cd; }
 .play { margin-top: 1.5rem; border: 0; border-radius: 999px; padding: .9rem 2.5rem; color: #091018; background: #65fbd2; font-weight: 700; box-shadow: 0 0 2rem #65fbd255; }
-.run { width: min(100%, 29rem); }
-header { display: flex; align-items: end; justify-content: space-between; margin-bottom: .8rem; }
-header h1 { font-size: clamp(1.7rem, 8vw, 3rem); }
-.score { margin: 0 0 .25rem; color: #aab1cd; text-transform: uppercase; letter-spacing: .12em; font-size: .75rem; }
-.score strong { display: block; color: #fff; font-size: 1.5rem; text-align: right; }
-.board-shell { padding: .55rem; border: 1px solid #727da933; border-radius: 1rem; background: #05071388; box-shadow: 0 1.5rem 4rem #0008; }
-.board { display: block; width: 100%; max-height: calc(100vh - 15rem); aspect-ratio: 1 / 2; margin: auto; touch-action: none; }
+.run {
+  align-self: start;
+  width: min(100%, calc((100vh - 3.125rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 2));
+  width: min(100%, calc((100dvh - 3.125rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 2));
+}
+.run-header { height: 2.125rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .375rem; }
+.run-header h1 { font-size: clamp(1rem, 5vw, 1.35rem); letter-spacing: -.045em; line-height: 1; }
+.score { margin: 0; color: #aab1cd; text-transform: uppercase; letter-spacing: .1em; font-size: clamp(.68rem, 2.8vw, .78rem); white-space: nowrap; }
+.score strong { color: #fff; font-size: inherit; }
+.board-shell { border: 1px solid #727da933; border-radius: .35rem; overflow: hidden; background: #05071388; box-shadow: 0 .75rem 2rem #0007; }
+.board { display: block; width: 100%; aspect-ratio: 1 / 2; touch-action: none; }
 [data-cell] { fill: #18203b; stroke: #59638b55; stroke-width: .035; }
 [data-player] { fill: #ffca5f; stroke: #fff2bd; stroke-width: .07; filter: drop-shadow(0 0 .25px #ffca5f); transition: x 120ms ease, y 120ms ease; }
-.controls { display: grid; grid-template-columns: repeat(3, 3.4rem); grid-template-areas: ". up ." "left down right"; justify-content: center; gap: .4rem; margin-top: .9rem; }
-.controls button { width: 3.4rem; height: 2.8rem; border: 1px solid #737da955; border-radius: .7rem; background: #1c2441cc; font-size: 1.25rem; }
-.controls button:active { background: #65fbd2; color: #091018; }
-[data-direction="up"] { grid-area: up; } [data-direction="left"] { grid-area: left; } [data-direction="down"] { grid-area: down; } [data-direction="right"] { grid-area: right; }
-.hint { margin: .7rem 0 0; text-align: center; color: #78819e; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
-@media (min-width: 700px) and (min-height: 760px) { .controls { grid-template-columns: repeat(3, 4rem); } .controls button { width: 4rem; height: 3.2rem; } }
-@media (max-height: 650px) { #app { padding: .6rem; } .run { width: min(100%, 21rem); } header { margin-bottom: .35rem; } .controls { margin-top: .4rem; } .hint { display: none; } }
