@@ -158,7 +158,7 @@ export function createRunEngine(options: RunEngineOptions = {}): RunEngine {
   }
 
   function axisContactTime(position: number, velocity: number): readonly [number, number] | null {
-    if (velocity === 0) return Math.abs(position) <= 1 ? [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY] : null;
+    if (velocity === 0) return Math.abs(position) < 1 ? [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY] : null;
     const first = (-1 - position) / velocity;
     const second = (1 - position) / velocity;
     return [Math.min(first, second), Math.max(first, second)];

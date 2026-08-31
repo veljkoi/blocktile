@@ -78,13 +78,12 @@ export function mountApp(root: HTMLElement): () => void {
         board.insertBefore(tile, player);
       }
       const horizontal = movingShieldOrHazard.direction === "left" || movingShieldOrHazard.direction === "right";
-      const inset = 0.3 * (1 - Math.exp(-(movingShieldOrHazard.id - 1) / 10));
       const column = horizontal ? movingShieldOrHazard.column : movingShieldOrHazard.column - 1;
       const row = horizontal ? movingShieldOrHazard.row - 1 : movingShieldOrHazard.row;
-      tile.setAttribute("x", String(column + inset));
-      tile.setAttribute("y", String(row + inset));
-      tile.setAttribute("width", String(1 - inset * 2));
-      tile.setAttribute("height", String(1 - inset * 2));
+      tile.setAttribute("x", String(column));
+      tile.setAttribute("y", String(row));
+      tile.setAttribute("width", "1");
+      tile.setAttribute("height", "1");
       tile.setAttribute("data-kind", movingShieldOrHazard.kind);
       tile.setAttribute("data-direction", movingShieldOrHazard.direction);
       const name = movingShieldOrHazard.kind === "shield" ? "Moving Shield" : "Hazard";

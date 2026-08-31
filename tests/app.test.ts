@@ -72,7 +72,10 @@ describe("Blocktile app", () => {
     nextFrame?.(3_000);
     nextFrame?.(4_500);
     const overlapping = root.querySelectorAll("[data-moving-shield-or-hazard]");
-    expect(overlapping[0]?.getAttribute("width")).not.toBe(overlapping[1]?.getAttribute("width"));
+    expect([...overlapping].map((tile) => [
+      tile.getAttribute("width"),
+      tile.getAttribute("height"),
+    ])).toEqual([...overlapping].map(() => ["1", "1"]));
     unmount();
   });
 
