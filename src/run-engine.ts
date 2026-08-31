@@ -89,6 +89,169 @@ export function createRunEngine(options: RunEngineOptions = {}): RunEngine {
     const nextColumn = Math.min(state.board.columns, Math.max(1, column + columnDelta));
     const nextRow = Math.min(state.board.rows, Math.max(1, row + rowDelta));
     if (nextColumn === column && nextRow === row) return;
+
+    const firstPushedShield = state.board.anchoredShields.find((shield) => (
+      shield.column === nextColumn && shield.row === nextRow
+    ));
+    if (firstPushedShield) {
+      let movingShieldsAndHazards = [...state.board.movingShieldsAndHazards];
+      let anchoredShields = [...state.board.anchoredShields];
+      let score = state.score;
+      let impacts = state.impacts;
+      let candidateNextImpactId = nextImpactId;
+      const displacingMovingShields = new Set<number>();
+
+      const overlapsCell = (tile: MovingShieldOrHazard, cellColumn: number, cellRow: number): boolean => {
+        const position = tilePosition(tile);
+        const x = cellColumn - 1;
+        const y = cellRow - 1;
+        return position.x < x + 1 && position.x + 1 > x
+          && position.y < y + 1 && position.y + 1 > y;
+      };
+
+      function pushAnchoredChain(startColumn: number, startRow: number): boolean {
+        const chain: AnchoredShield[] = [];
+        let destinationColumn = startColumn;
+        let destinationRow = startRow;
+        while (true) {
+          const shield = anchoredShields.find((candidate) => (
+            candidate.column === destinationColumn && candidate.row === destinationRow
+          ));
+          if (!shield) break;
+          chain.push(shield);
+          destinationColumn += columnDelta;
+          destinationRow += rowDelta;
+        }
+        if (chain.length === 0) return true;
+        if (destinationColumn < 1 || destinationColumn > state.board.columns
+          || destinationRow < 1 || destinationRow > state.board.rows) return false;
+
+        const destinationOccupants = movingShieldsAndHazards
+          .filter((tile) => overlapsCell(tile, destinationColumn, destinationRow))
+          .sort((first, second) => first.id - second.id);
+        const contactedHazard = destinationOccupants.find((tile): tile is Hazard => tile.kind === "hazard");
+        const contactedMovingShields = destinationOccupants
+          .filter((tile): tile is MovingShield => tile.kind === "shield");
+        const destroyedShield = contactedHazard ? chain.at(-1) : undefined;
+
+        if (contactedHazard && destroyedShield) {
+          const hazardPosition = tilePosition(contactedHazard);
+          const destination = { x: destinationColumn - 1, y: destinationRow - 1 };
+          movingShieldsAndHazards = movingShieldsAndHazards.filter(({ id }) => id !== contactedHazard.id);
+          anchoredShields = anchoredShields.filter(({ id }) => id !== destroyedShield.id);
+          score += 1;
+          impacts = [...impacts, {
+            id: candidateNextImpactId++, kind: "hazard-shield",
+            x: (hazardPosition.x + destination.x + 1) / 2,
+            y: (hazardPosition.y + destination.y + 1) / 2,
+            remainingMilliseconds: 220,
+          }];
+        } else {
+          for (const movingShield of contactedMovingShields) {
+            if (!displaceMovingShield(movingShield, destinationColumn, destinationRow)) return false;
+          }
+        }
+
+        const shiftedIds = new Set(chain
+          .filter(({ id }) => id !== destroyedShield?.id)
+          .map(({ id }) => id));
+        anchoredShields = anchoredShields.map((shield) => (
+          shiftedIds.has(shield.id)
+            ? { ...shield, column: shield.column + columnDelta, row: shield.row + rowDelta }
+            : shield
+        ));
+        return true;
+      }
+
+      function displaceMovingShield(
+        movingShield: MovingShield,
+        contactColumn: number,
+        contactRow: number,
+      ): boolean {
+        if (displacingMovingShields.has(movingShield.id)) return false;
+        displacingMovingShields.add(movingShield.id);
+        const horizontal = movingShield.direction === "left" || movingShield.direction === "right";
+
+        if (movingShield.direction === OPPOSITE_DIRECTIONS[direction]) {
+          const anchoredColumn = contactColumn + columnDelta;
+          const anchoredRow = contactRow + rowDelta;
+          if (anchoredColumn < 1 || anchoredColumn > state.board.columns
+            || anchoredRow < 1 || anchoredRow > state.board.rows) return false;
+          if (!pushAnchoredChain(anchoredColumn, anchoredRow)) return false;
+          const movingOccupants = movingShieldsAndHazards
+            .filter((tile): tile is MovingShield => (
+              tile.kind === "shield"
+              && tile.id !== movingShield.id
+              && overlapsCell(tile, anchoredColumn, anchoredRow)
+            ))
+            .sort((first, second) => first.id - second.id);
+          for (const occupant of movingOccupants) {
+            if (!displaceMovingShield(occupant, anchoredColumn, anchoredRow)) return false;
+          }
+          movingShieldsAndHazards = movingShieldsAndHazards.filter(({ id }) => id !== movingShield.id);
+          anchoredShields = [...anchoredShields, {
+            id: movingShield.id,
+            kind: "anchored-shield",
+            column: anchoredColumn,
+            row: anchoredRow,
+          }];
+          displacingMovingShields.delete(movingShield.id);
+          return true;
+        }
+
+        const displacedShield: MovingShield = movingShield.direction === direction
+          ? {
+              ...movingShield,
+              column: movingShield.column + (horizontal ? columnDelta : 0),
+              row: movingShield.row + (horizontal ? 0 : rowDelta),
+            }
+          : {
+              ...movingShield,
+              lane: movingShield.lane + (horizontal ? rowDelta : columnDelta),
+              column: movingShield.column + (horizontal ? 0 : columnDelta),
+              row: movingShield.row + (horizontal ? rowDelta : 0),
+            };
+        const laneLimit = horizontal ? state.board.rows : state.board.columns;
+        const displacedPosition = tilePosition(displacedShield);
+        if (displacedShield.lane < 1 || displacedShield.lane > laneLimit
+          || displacedPosition.x < 0 || displacedPosition.x > state.board.columns - 1
+          || displacedPosition.y < 0 || displacedPosition.y > state.board.rows - 1) return false;
+
+        while (true) {
+          const blockingShield = anchoredShields.find((anchoredShield) => {
+            const x = anchoredShield.column - 1;
+            const y = anchoredShield.row - 1;
+            return displacedPosition.x < x + 1 && displacedPosition.x + 1 > x
+              && displacedPosition.y < y + 1 && displacedPosition.y + 1 > y;
+          });
+          if (!blockingShield) break;
+          if (!pushAnchoredChain(blockingShield.column, blockingShield.row)) return false;
+        }
+        movingShieldsAndHazards = movingShieldsAndHazards.map((tile) => (
+          tile.id === displacedShield.id ? displacedShield : tile
+        ));
+        displacingMovingShields.delete(movingShield.id);
+        return true;
+      }
+
+      if (!pushAnchoredChain(nextColumn, nextRow)) return;
+      state = {
+        ...state,
+        score,
+        impacts,
+        board: {
+          ...state.board,
+          player: { column: nextColumn, row: nextRow },
+          movingShieldsAndHazards,
+          anchoredShields,
+        },
+        moving: true,
+      };
+      nextImpactId = candidateNextImpactId;
+      resolveImmediateHazardShieldContacts();
+      movementRemaining = MOVEMENT_MILLISECONDS;
+      return;
+    }
     const target = { x: nextColumn - 1, y: nextRow - 1 };
     const contactedShield = state.board.movingShieldsAndHazards.find((tile): tile is MovingShield => {
       if (tile.kind !== "shield") return false;
@@ -125,6 +288,7 @@ export function createRunEngine(options: RunEngineOptions = {}): RunEngine {
         }],
         moving: true,
       };
+      resolveImmediateHazardShieldContacts();
       movementRemaining = MOVEMENT_MILLISECONDS;
       return;
     }
@@ -150,6 +314,7 @@ export function createRunEngine(options: RunEngineOptions = {}): RunEngine {
         },
         moving: true,
       };
+      resolveImmediateHazardShieldContacts();
       movementRemaining = MOVEMENT_MILLISECONDS;
       return;
     }
@@ -174,6 +339,7 @@ export function createRunEngine(options: RunEngineOptions = {}): RunEngine {
         },
         moving: true,
       };
+      resolveImmediateHazardShieldContacts();
       movementRemaining = MOVEMENT_MILLISECONDS;
       return;
     }
@@ -502,6 +668,14 @@ export function createRunEngine(options: RunEngineOptions = {}): RunEngine {
     movementRemaining = 0;
   }
 
+  function resolveImmediateHazardShieldContacts(): void {
+    while (true) {
+      const contact = nextContact(0);
+      if (contact?.kind !== "hazard-shield" && contact?.kind !== "hazard-anchored") return;
+      resolveContact(contact);
+    }
+  }
+
   function moveMovingShieldOrHazards(elapsedMilliseconds: number): void {
     let remaining = elapsedMilliseconds;
     while (remaining > 0 && state.status === "running") {
@@ -509,7 +683,14 @@ export function createRunEngine(options: RunEngineOptions = {}): RunEngine {
       const movement = contact?.time ?? remaining;
       advanceMovingTilesAndImpacts(movement);
       remaining -= movement;
-      if (contact) resolveContact(contact);
+      if (contact) {
+        resolveContact(contact);
+        while (state.status === "running") {
+          const simultaneousContact = nextContact(0);
+          if (!simultaneousContact) break;
+          resolveContact(simultaneousContact);
+        }
+      }
     }
     if (state.status !== "running") return;
     const movingShieldsAndHazards = state.board.movingShieldsAndHazards.filter((tile) => {
