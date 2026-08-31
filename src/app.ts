@@ -89,6 +89,32 @@ export function mountApp(root: HTMLElement): () => void {
       const name = movingShieldOrHazard.kind === "shield" ? "Moving Shield" : "Hazard";
       tile.setAttribute("aria-label", name + " traveling " + movingShieldOrHazard.direction + " in Lane " + movingShieldOrHazard.lane);
     });
+    const anchoredIds = new Set(state.board.anchoredShields.map(({ id }) => String(id)));
+    board.querySelectorAll<SVGElement>("[data-anchor-id]").forEach((element) => {
+      if (!anchoredIds.has(element.dataset.anchorId ?? "")) element.remove();
+    });
+    state.board.anchoredShields.forEach((anchoredShield) => {
+      let tile = board.querySelector<SVGRectElement>("[data-anchored-shield][data-anchor-id=\"" + anchoredShield.id + "\"]");
+      if (!tile) {
+        tile = document.createElementNS(SVG_NS, "rect");
+        tile.setAttribute("data-anchored-shield", "");
+        tile.setAttribute("data-anchor-id", String(anchoredShield.id));
+        tile.setAttribute("width", "1"); tile.setAttribute("height", "1"); tile.setAttribute("rx", ".1");
+        board.insertBefore(tile, player);
+        const crossbar = document.createElementNS(SVG_NS, "line");
+        crossbar.setAttribute("data-anchor-crossbar", "");
+        crossbar.setAttribute("data-anchor-id", String(anchoredShield.id));
+        board.insertBefore(crossbar, player);
+      }
+      const x = anchoredShield.column - 1;
+      const y = anchoredShield.row - 1;
+      tile.setAttribute("x", String(x)); tile.setAttribute("y", String(y));
+      tile.setAttribute("data-kind", anchoredShield.kind);
+      tile.setAttribute("aria-label", `Anchored Shield at column ${anchoredShield.column}, row ${anchoredShield.row}`);
+      const crossbar = board.querySelector<SVGLineElement>("[data-anchor-crossbar][data-anchor-id=\"" + anchoredShield.id + "\"]");
+      crossbar?.setAttribute("x1", String(x + 0.2)); crossbar?.setAttribute("x2", String(x + 0.8));
+      crossbar?.setAttribute("y1", String(y + 0.35)); crossbar?.setAttribute("y2", String(y + 0.35));
+    });
     player.setAttribute("aria-label", `Player at column ${state.board.player.column}, row ${state.board.player.row}`);
     player.setAttribute("x", String(state.board.player.column - 1)); player.setAttribute("y", String(state.board.player.row - 1));
     const impactIds = new Set(state.impacts.map(({ id }) => String(id)));

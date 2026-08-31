@@ -79,6 +79,27 @@ describe("Blocktile app", () => {
     unmount();
   });
 
+  it("distinguishes Anchored Shields and renders the compression-to-anchor impact", () => {
+    let nextFrame: FrameRequestCallback | undefined;
+    vi.spyOn(performance, "now").mockReturnValue(0);
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => { nextFrame = callback; return 1; });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+    vi.spyOn(Math, "random").mockImplementation(seededSequence(0, 0.99, 7 / 16));
+    const root = document.createElement("main");
+    const unmount = mountApp(root);
+    fireEvent.click(getByRole(root, "button", { name: "Play" }));
+
+    nextFrame?.(3_000);
+
+    const anchoredShield = root.querySelector("[data-anchored-shield]");
+    expect(anchoredShield?.getAttribute("data-kind")).toBe("anchored-shield");
+    expect(anchoredShield?.getAttribute("aria-label")).toBe("Anchored Shield at column 3, row 8");
+    expect(anchoredShield?.getAttribute("x")).toBe("2");
+    expect(anchoredShield?.getAttribute("y")).toBe("7");
+    expect(root.querySelector("[data-impact-kind=\"shield-player\"]")).not.toBeNull();
+    unmount();
+  });
+
   it("keeps the final Board visible, persists Best, and starts a fresh Run on Play again", () => {
     let nextFrame: FrameRequestCallback | undefined;
     vi.spyOn(performance, "now").mockReturnValue(0);
@@ -86,7 +107,7 @@ describe("Blocktile app", () => {
     vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
     vi.spyOn(Math, "random").mockImplementation(seededSequence(
       0, 0.99, 7 / 16,
-      0.99, 0.5, 7 / 16,
+      0.99, 0.99, 7 / 16,
       0.99, 0.5, 7 / 16,
     ));
     const root = document.createElement("main");
@@ -95,7 +116,7 @@ describe("Blocktile app", () => {
 
     nextFrame?.(1_500);
     nextFrame?.(3_000);
-    nextFrame?.(4_250);
+    nextFrame?.(4_000);
     expect(root.querySelector(".score strong")?.textContent).toBe("1");
     expect(root.querySelector("[data-impact-kind=\"hazard-shield\"]")).not.toBeNull();
     nextFrame?.(4_500);
