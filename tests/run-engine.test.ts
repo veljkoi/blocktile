@@ -573,6 +573,39 @@ describe("run engine", () => {
     });
   });
 
+  it("transmits a rear Push through an Anchored Shield into a Moving Shield", () => {
+    const engine = createRunEngine({ random: seededSequence(
+      0, 0.5, 7 / 16,
+      0, 0.99, 6 / 16,
+      0, 0.99, 15 / 16,
+      0, 0.99, 15 / 16,
+    ) });
+    engine.advance(3_500);
+    engine.act("up"); engine.advance(120);
+    engine.act("up"); engine.advance(120);
+    engine.act("right"); engine.advance(120);
+    engine.act("right"); engine.advance(120);
+    engine.advance(1_820);
+    engine.act("down"); engine.advance(120);
+    engine.act("left"); engine.advance(120);
+    engine.act("left"); engine.advance(120);
+    engine.act("down"); engine.advance(120);
+    expect(engine.getState().board.player).toEqual({ column: 4, row: 8 });
+    const before = engine.getState().board.movingShieldsAndHazards.find(({ id }) => id === 2);
+
+    engine.act("right");
+
+    const displaced = engine.getState().board.movingShieldsAndHazards.find(({ id }) => id === 2);
+    expect(engine.getState().board).toMatchObject({
+      player: { column: 5, row: 8 },
+      anchoredShields: [
+        { id: 1, kind: "anchored-shield", column: 6, row: 8 },
+      ],
+    });
+    expect(displaced).toMatchObject({ id: 2, kind: "shield", direction: "right", lane: 8 });
+    expect(displaced?.column).toBeCloseTo((before?.column ?? 0) + 1);
+  });
+
   it("transmits a perpendicular Push into a Moving Shield", () => {
     const engine = createRunEngine({ random: seededSequence(
       0, 0.99, 7 / 16,
