@@ -33,6 +33,15 @@ h1 { margin: 0; font-size: clamp(2rem, 9vw, 4.5rem); letter-spacing: -.07em; tex
 [data-cell] { fill: #18203b; stroke: #59638b55; stroke-width: .035; }
 [data-moving-shield-or-hazard] { vector-effect: non-scaling-stroke; }
 [data-kind="shield"] { fill: #65fbd2; stroke: #d9fff5; }
+[data-kind="anchored-shield"] {
+  fill: #268f75;
+  stroke: #b9ffe9;
+  stroke-width: .08;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: anchored-shield-arrival 220ms ease-out both;
+}
+[data-anchor-crossbar] { stroke: #e0fff6; stroke-width: .1; stroke-linecap: round; pointer-events: none; }
 [data-kind="hazard"] { fill: #ff557a; stroke: #ffd5de; }
 [data-player] { fill: #ffca5f; stroke: #fff2bd; stroke-width: .07; filter: drop-shadow(0 0 .25px #ffca5f); transition: x 120ms ease, y 120ms ease; }
 
@@ -66,6 +75,16 @@ h1 { margin: 0; font-size: clamp(2rem, 9vw, 4.5rem); letter-spacing: -.07em; tex
   animation: player-freeze 220ms ease-out both;
 }
 [data-impact-kind="hazard-player"] { display: none; }
+[data-impact-kind="shield-player"] {
+  fill: none;
+  stroke: #65fbd2;
+  stroke-width: .14;
+  vector-effect: non-scaling-stroke;
+  transform-box: fill-box;
+  transform-origin: center;
+  pointer-events: none;
+  animation: shield-anchor-impact 220ms ease-out forwards;
+}
 .run-over {
   position: absolute;
   inset: 0;
@@ -84,6 +103,15 @@ h1 { margin: 0; font-size: clamp(2rem, 9vw, 4.5rem); letter-spacing: -.07em; tex
 @keyframes interception-impact {
   0% { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(.08); }
+}
+@keyframes shield-anchor-impact {
+  0% { opacity: 1; transform: scale(1); }
+  55% { opacity: .9; transform: scale(.55, .18); }
+  100% { opacity: 0; transform: scale(.25); }
+}
+@keyframes anchored-shield-arrival {
+  0%, 45% { transform: scale(1, .25); }
+  100% { transform: scale(1); }
 }
 @keyframes hazard-flash {
   0% { opacity: 1; }
