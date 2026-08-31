@@ -207,4 +207,37 @@ describe("run engine", () => {
       expect.objectContaining({ kind: "hazard-shield", x: 5.5, y: 0.5 }),
     ]);
   });
+
+  it("does not collide tiles passing in adjacent horizontal Lanes", () => {
+    const engine = createRunEngine({ random: seededSequence(
+      0, 0.99, 0,
+      0.99, 0.5, 1 / 16,
+      0, 0.99, 0.99,
+    ) });
+
+    engine.advance(4_751);
+
+    expect(engine.getState().score).toBe(0);
+    expect(engine.getState().board.movingShieldsAndHazards).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 1, kind: "shield", direction: "right", lane: 1 }),
+      expect.objectContaining({ id: 2, kind: "hazard", direction: "left", lane: 2 }),
+    ]));
+  });
+
+  it("does not collide tiles passing in adjacent vertical Lanes", () => {
+    const engine = createRunEngine({ random: seededSequence(
+      0, 0.25, 0,
+      0.99, 0, 1 / 8,
+      0, 0.25, 0.99,
+      0, 0.25, 0.99,
+    ) });
+
+    engine.advance(6_751);
+
+    expect(engine.getState().score).toBe(0);
+    expect(engine.getState().board.movingShieldsAndHazards).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 1, kind: "shield", direction: "down", lane: 1 }),
+      expect.objectContaining({ id: 2, kind: "hazard", direction: "up", lane: 2 }),
+    ]));
+  });
 });
