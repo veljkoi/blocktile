@@ -585,13 +585,19 @@ describe("run engine", () => {
     engine.act("up"); engine.advance(120);
     engine.act("right"); engine.advance(120);
     engine.act("right"); engine.advance(120);
-    engine.advance(1_820);
+    engine.advance(2_021);
     engine.act("down"); engine.advance(120);
     engine.act("left"); engine.advance(120);
     engine.act("left"); engine.advance(120);
     engine.act("down"); engine.advance(120);
-    expect(engine.getState().board.player).toEqual({ column: 4, row: 8 });
     const before = engine.getState().board.movingShieldsAndHazards.find(({ id }) => id === 2);
+    expect(engine.getState().board).toMatchObject({
+      player: { column: 4, row: 8 },
+      anchoredShields: [
+        { id: 1, kind: "anchored-shield", column: 5, row: 8 },
+      ],
+    });
+    expect(before).toMatchObject({ id: 2, kind: "shield", direction: "right", lane: 8 });
 
     engine.act("right");
 
