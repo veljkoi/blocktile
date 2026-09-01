@@ -98,7 +98,7 @@ describe("run engine", () => {
     ]);
   });
 
-  it("uniformly samples a Lane and skips a Hazard with less than 750 milliseconds to react", () => {
+  it("allows a Hazard with no reaction time to spawn at the Player entry", () => {
     const engine = createRunEngine({ random: seededSequence(0.99, 0.99, 7 / 16) });
     for (let step = 0; step < 3; step += 1) {
       engine.act("left");
@@ -107,8 +107,33 @@ describe("run engine", () => {
 
     engine.advance(1_140);
 
-    expect(engine.getState().board.player).toEqual({ column: 1, row: 8 });
-    expect(engine.getState().board.movingShieldsAndHazards).toEqual([]);
+    expect(engine.getState()).toMatchObject({
+      status: "ended",
+      score: 0,
+      board: {
+        player: { column: 1, row: 8 },
+        movingShieldsAndHazards: [expect.objectContaining({ kind: "hazard", direction: "right", lane: 8 })],
+      },
+      impacts: [expect.objectContaining({ kind: "hazard-player" })],
+    });
+  });
+
+  it("skips a Shield spawn at a Player-occupied entry", () => {
+    const engine = createRunEngine({ random: seededSequence(0, 0.99, 7 / 16) });
+    for (let step = 0; step < 3; step += 1) {
+      engine.act("left");
+      engine.advance(120);
+    }
+
+    engine.advance(1_140);
+
+    expect(engine.getState()).toMatchObject({
+      status: "running",
+      board: {
+        player: { column: 1, row: 8 },
+        movingShieldsAndHazards: [],
+      },
+    });
   });
 
   it("starts spawn attempts at 1.5 seconds and accelerates after ten seconds", () => {
@@ -136,17 +161,99 @@ describe("run engine", () => {
     expect(randomCalls - callsAtFloor).toBe(12);
   });
 
-  it("rejects a spawn when its entry is occupied", () => {
+  it("raises Hazard probability by one percentage point every twenty seconds", () => {
+    let randomCall = 0;
+    const engine = createRunEngine({
+      random: () => [0.495, 0.99, 0.99][randomCall++ % 3] ?? 0,
+    });
+    const hazardPressure = () => (
+      engine.getState().score
+      + engine.getState().board.movingShieldsAndHazards.filter(({ kind }) => kind === "hazard").length
+    );
+
+    engine.advance(19_999);
+    expect(hazardPressure()).toBe(0);
+
+    engine.advance(2_001);
+    expect(hazardPressure()).toBeGreaterThan(0);
+  });
+
+  it("caps Hazard probability at ninety percent", () => {
+    let randomCall = 0;
+    const engine = createRunEngine({
+      random: () => [0.105, 0.99, 0.99][randomCall++ % 3] ?? 0,
+    });
+    const hazardPressure = () => (
+      engine.getState().score
+      + engine.getState().board.movingShieldsAndHazards.filter(({ kind }) => kind === "hazard").length
+    );
+
+    engine.advance(799_999);
+    expect(hazardPressure()).toBe(0);
+
+    engine.advance(1_001);
+    expect(hazardPressure()).toBeGreaterThan(0);
+  });
+
+  it("allows a Hazard to spawn when its entry is occupied by another Hazard", () => {
     const engine = createRunEngine({ random: () => 0.99 });
     engine.advance(225_000);
-    const before = engine.getState().board.movingShieldsAndHazards;
-    const latestId = Math.max(...before.map(({ id }) => id));
-    expect(before.filter(({ column, row }) => row === 16 && column < 1 && column + 1 > 0)).toHaveLength(1);
+    const latestId = Math.max(...engine.getState().board.movingShieldsAndHazards.map(({ id }) => id));
+
+    engine.advance(500);
+
+    const nextLatestId = Math.max(...engine.getState().board.movingShieldsAndHazards.map(({ id }) => id));
+    expect(nextLatestId).toBe(latestId + 1);
+  });
+
+  it("skips a Shield when its entry is occupied by another Shield", () => {
+    let randomCall = 0;
+    const engine = createRunEngine({
+      random: () => [0, 0.99, 0.99][randomCall++ % 3] ?? 0,
+    });
+    engine.advance(225_000);
+    const latestId = Math.max(...engine.getState().board.movingShieldsAndHazards.map(({ id }) => id));
 
     engine.advance(500);
 
     const nextLatestId = Math.max(...engine.getState().board.movingShieldsAndHazards.map(({ id }) => id));
     expect(nextLatestId).toBe(latestId);
+  });
+
+  it("scores immediately when a Hazard spawns at a Shield-occupied entry", () => {
+    let kindRandom = 0;
+    let randomCall = 0;
+    const engine = createRunEngine({
+      random: () => {
+        const draw = randomCall++ % 3;
+        if (draw === 0) return kindRandom;
+        return 0.99;
+      },
+    });
+    engine.advance(225_000);
+    kindRandom = 0.99;
+
+    engine.advance(500);
+
+    expect(engine.getState()).toMatchObject({ score: 1, status: "running" });
+  });
+
+  it("scores immediately when a Shield spawns at a Hazard-occupied entry", () => {
+    let kindRandom = 0.99;
+    let randomCall = 0;
+    const engine = createRunEngine({
+      random: () => {
+        const draw = randomCall++ % 3;
+        if (draw === 0) return kindRandom;
+        return 0.99;
+      },
+    });
+    engine.advance(225_000);
+    kindRandom = 0;
+
+    engine.advance(500);
+
+    expect(engine.getState()).toMatchObject({ score: 1, status: "running" });
   });
 
   it("allows same-kind Moving Shields and Hazards to overlap", () => {

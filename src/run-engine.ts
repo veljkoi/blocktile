@@ -42,7 +42,10 @@ const INITIAL_SPAWN_INTERVAL = 1_500;
 const MINIMUM_SPAWN_INTERVAL = 500;
 const SPAWN_INTERVAL_STEP = 50;
 const CADENCE_STEP_MILLISECONDS = 10_000;
-const MINIMUM_HAZARD_REACTION_MILLISECONDS = 750;
+const INITIAL_HAZARD_PROBABILITY = 0.5;
+const MAXIMUM_HAZARD_PROBABILITY = 0.9;
+const HAZARD_PROBABILITY_STEP = 0.01;
+const HAZARD_PROBABILITY_STEP_MILLISECONDS = 20_000;
 const DIRECTIONS: readonly Direction[] = ["up", "down", "left", "right"];
 const DIRECTION_DELTAS: Record<Direction, readonly [number, number]> = {
   up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0],
@@ -382,39 +385,92 @@ export function createRunEngine(options: RunEngineOptions = {}): RunEngine {
     return spawnIntervalAt(runElapsed);
   }
 
-  function entryIsOccupied(direction: Direction, lane: number): boolean {
-    const movingEntryOccupied = state.board.movingShieldsAndHazards.some((tile) => {
-      if (direction === "right") return tile.row === lane && tile.column < 1 && tile.column + 1 > 0;
-      if (direction === "left") return tile.row === lane && tile.column < 8 && tile.column + 1 > 7;
-      if (direction === "down") return tile.column === lane && tile.row < 1 && tile.row + 1 > 0;
-      return tile.column === lane && tile.row < 16 && tile.row + 1 > 15;
-    });
-    const anchoredEntryOccupied = state.board.anchoredShields.some((shield) => {
-      if (direction === "right") return shield.row === lane && shield.column === 1;
-      if (direction === "left") return shield.row === lane && shield.column === state.board.columns;
-      if (direction === "down") return shield.column === lane && shield.row === 1;
-      return shield.column === lane && shield.row === state.board.rows;
-    });
-    return movingEntryOccupied || anchoredEntryOccupied;
+  function hazardProbabilityAt(elapsedMilliseconds: number): number {
+    const increases = Math.floor(elapsedMilliseconds / HAZARD_PROBABILITY_STEP_MILLISECONDS);
+    return Math.min(
+      MAXIMUM_HAZARD_PROBABILITY,
+      INITIAL_HAZARD_PROBABILITY + increases * HAZARD_PROBABILITY_STEP,
+    );
   }
 
-  function reactionMilliseconds(direction: Direction, lane: number): number {
-    const player = state.board.player;
-    if (direction === "right" && player.row === lane) return (player.column - 1) / TILE_SPEED;
-    if (direction === "left" && player.row === lane) return (8 - player.column) / TILE_SPEED;
-    if (direction === "down" && player.column === lane) return (player.row - 1) / TILE_SPEED;
-    if (direction === "up" && player.column === lane) return (16 - player.row) / TILE_SPEED;
-    return Number.POSITIVE_INFINITY;
+  function entryCell(direction: Direction, lane: number): BoardPosition {
+    if (direction === "right") return { column: 1, row: lane };
+    if (direction === "left") return { column: state.board.columns, row: lane };
+    if (direction === "down") return { column: lane, row: 1 };
+    return { column: lane, row: state.board.rows };
+  }
+
+  function entryOccupants(direction: Direction, lane: number): Readonly<{
+    moving: readonly MovingShieldOrHazard[];
+    anchored: readonly AnchoredShield[];
+    player: boolean;
+  }> {
+    const cell = entryCell(direction, lane);
+    const x = cell.column - 1;
+    const y = cell.row - 1;
+    const moving = state.board.movingShieldsAndHazards.filter((tile) => {
+      const position = tilePosition(tile);
+      return position.x < x + 1 && position.x + 1 > x
+        && position.y < y + 1 && position.y + 1 > y;
+    });
+    const anchored = state.board.anchoredShields.filter((shield) => (
+      shield.column === cell.column && shield.row === cell.row
+    ));
+    const player = state.board.player.column === cell.column && state.board.player.row === cell.row;
+    return { moving, anchored, player };
+  }
+
+  function resolveSpawnContact(
+    tile: MovingShieldOrHazard,
+    occupants: ReturnType<typeof entryOccupants>,
+  ): void {
+    const candidates: Contact[] = [];
+    if (tile.kind === "hazard") {
+      for (const occupant of occupants.moving) {
+        if (occupant.kind === "shield") {
+          candidates.push({ time: 0, kind: "hazard-shield", hazard: tile, shield: occupant });
+        }
+      }
+      for (const anchoredShield of occupants.anchored) {
+        candidates.push({ time: 0, kind: "hazard-anchored", hazard: tile, anchoredShield });
+      }
+      if (occupants.player) candidates.push({ time: 0, kind: "hazard-player", hazard: tile });
+    } else {
+      for (const occupant of occupants.moving) {
+        if (occupant.kind === "hazard") {
+          candidates.push({ time: 0, kind: "hazard-shield", hazard: occupant, shield: tile });
+        }
+      }
+    }
+    const existingTileId = (contact: Contact): number => {
+      if (contact.kind === "hazard-shield") {
+        return contact.hazard.id === tile.id ? contact.shield.id : contact.hazard.id;
+      }
+      if (contact.kind === "hazard-anchored") return contact.anchoredShield.id;
+      return tile.id;
+    };
+    candidates.sort((first, second) => (
+      CONTACT_PRIORITY[first.kind] - CONTACT_PRIORITY[second.kind]
+      || existingTileId(first) - existingTileId(second)
+    ));
+    const contact = candidates[0];
+    if (contact) resolveContact(contact);
   }
 
   function attemptSpawn(): void {
-    const kind: MovingShieldOrHazard["kind"] = random() < 0.5 ? "shield" : "hazard";
+    const kind: MovingShieldOrHazard["kind"] = random() < 1 - hazardProbabilityAt(runElapsed)
+      ? "shield"
+      : "hazard";
     const directionIndex = Math.min(DIRECTIONS.length - 1, Math.floor(random() * DIRECTIONS.length));
     const direction = DIRECTIONS[directionIndex] ?? "up";
     const laneCount = direction === "left" || direction === "right" ? state.board.rows : state.board.columns;
     const lane = Math.min(laneCount, Math.floor(random() * laneCount) + 1);
-    if (entryIsOccupied(direction, lane)) return;
-    if (kind === "hazard" && reactionMilliseconds(direction, lane) < MINIMUM_HAZARD_REACTION_MILLISECONDS) return;
+    const occupants = entryOccupants(direction, lane);
+    if (kind === "shield" && (
+      occupants.player
+      || occupants.anchored.length > 0
+      || occupants.moving.some((occupant) => occupant.kind !== "hazard")
+    )) return;
     const horizontal = direction === "left" || direction === "right";
     const tile: MovingShieldOrHazard = {
       id: nextTileId,
@@ -426,6 +482,7 @@ export function createRunEngine(options: RunEngineOptions = {}): RunEngine {
     };
     nextTileId += 1;
     state = { ...state, board: { ...state.board, movingShieldsAndHazards: [...state.board.movingShieldsAndHazards, tile] } };
+    resolveSpawnContact(tile, occupants);
   }
 
   function tilePosition(tile: MovingShieldOrHazard): Readonly<{ x: number; y: number }> {
