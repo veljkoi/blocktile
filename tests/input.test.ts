@@ -11,9 +11,9 @@ describe("input interpretation", () => {
     expect(directionFromKey(key)).toBe(direction);
   });
 
-  it("requires 24 CSS pixels and resolves a swipe by dominant axis", () => {
-    expect(directionFromSwipe(0, 0, 23, 0)).toBeNull();
-    expect(directionFromSwipe(0, 0, 24, 10)).toBe("right");
+  it("requires 6 CSS pixels and resolves a swipe by dominant axis", () => {
+    expect(directionFromSwipe(0, 0, 5, 0)).toBeNull();
+    expect(directionFromSwipe(0, 0, 6, 2)).toBe("right");
     expect(directionFromSwipe(0, 0, -25, 24)).toBe("left");
     expect(directionFromSwipe(0, 0, 24, -25)).toBe("up");
     expect(directionFromSwipe(0, 0, 2, 24)).toBe("down");

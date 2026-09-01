@@ -19,7 +19,7 @@ export function directionFromSwipe(
 ): Direction | null {
   const horizontal = endX - startX;
   const vertical = endY - startY;
-  if (Math.max(Math.abs(horizontal), Math.abs(vertical)) < 24) return null;
+  if (Math.max(Math.abs(horizontal), Math.abs(vertical)) < 6) return null;
   if (Math.abs(horizontal) >= Math.abs(vertical)) return horizontal < 0 ? "left" : "right";
   return vertical < 0 ? "up" : "down";
 }
