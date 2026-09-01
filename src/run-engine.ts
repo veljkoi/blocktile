@@ -36,7 +36,7 @@ export type RunEngine = Readonly<{
 
 export type RunEngineOptions = Readonly<{ random?: () => number }>;
 
-const MOVEMENT_MILLISECONDS = 120;
+const MOVEMENT_MILLISECONDS = 10;
 const TILE_SPEED = 2 / 1_000;
 const INITIAL_SPAWN_INTERVAL = 1_500;
 const MINIMUM_SPAWN_INTERVAL = 500;

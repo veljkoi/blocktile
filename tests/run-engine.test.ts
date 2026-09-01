@@ -58,16 +58,16 @@ describe("run engine", () => {
     expect(engine.getState().board.player).toEqual({ column: 8, row: 16 });
   });
 
-  it("buffers at most one command during the 120 millisecond movement", () => {
+  it("buffers at most one command during the 10 millisecond movement", () => {
     const engine = createRunEngine();
     engine.act("right");
     engine.act("down");
     engine.act("left");
     expect(engine.getState().board.player).toEqual({ column: 5, row: 8 });
-    engine.advance(120);
+    engine.advance(10);
     expect(engine.getState().board.player).toEqual({ column: 5, row: 9 });
     expect(engine.getState().moving).toBe(true);
-    engine.advance(120);
+    engine.advance(10);
     expect(engine.getState().moving).toBe(false);
   });
 

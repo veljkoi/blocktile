@@ -43,7 +43,7 @@ h1 { margin: 0; font-size: clamp(2rem, 9vw, 4.5rem); letter-spacing: -.07em; tex
 }
 [data-anchor-crossbar] { stroke: #e0fff6; stroke-width: .1; stroke-linecap: round; pointer-events: none; }
 [data-kind="hazard"] { fill: #ff557a; stroke: #ffd5de; }
-[data-player] { fill: #ffca5f; stroke: #fff2bd; stroke-width: .07; filter: drop-shadow(0 0 .25px #ffca5f); transition: x 120ms ease, y 120ms ease; }
+[data-player] { fill: #ffca5f; stroke: #fff2bd; stroke-width: .07; filter: drop-shadow(0 0 .25px #ffca5f); transition: x 10ms ease, y 10ms ease; }
 
 .run-scores { display: flex; align-items: center; gap: .7rem; }
 .best { margin: 0; color: #747e9f; text-transform: uppercase; letter-spacing: .1em; font-size: clamp(.62rem, 2.5vw, .72rem); white-space: nowrap; }
